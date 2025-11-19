@@ -79,6 +79,12 @@ struct RemakeConfig {
   float max_elev = -1;
   float ring_elev_resolution = -1;
   int max_elev_scan = -1;   // (max_elev - min_elev) / ring_elev_resolution
+
+  // Ring-based vertical binning (alternative to elevation angle binning)
+  bool use_ring_for_vertical = false;  // If true, use ring number instead of elevation angle
+  int min_ring = 0;                    
+  int max_ring = -1;                   
+  int vertical_bins = -1;              // Normally max_ring+1-min_ring
 };
 
 

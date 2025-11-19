@@ -50,14 +50,24 @@ Udp1_4Parser<T_Point>::Udp1_4Parser(std::string lidar_type) {
   }
   /* JT128 end */
   if (lidar_type == STR_PANDARN || lidar_type == STR_OT128) {
+    // Horizontal (azimuth) configuration
     this->default_remake_config.min_azi = 0.f;
     this->default_remake_config.max_azi = 360.f;
     this->default_remake_config.ring_azi_resolution = 0.1f;
     this->default_remake_config.max_azi_scan = 3600;   // (max_azi - min_azi) / ring_azi_resolution
+
+    // Horizontal (azimuth) configuration
+    // Elevation based, keeping inits for info - not used when use_ring_for_vertical = true
     this->default_remake_config.min_elev = -25.f;
     this->default_remake_config.max_elev = 15.f;
     this->default_remake_config.ring_elev_resolution = 0.125f;
     this->default_remake_config.max_elev_scan = 320;   // (max_elev - min_elev) / ring_elev_resolution
+
+    // Ring-based vertical binning (NEW for OT128)
+    this->default_remake_config.use_ring_for_vertical = true;
+    this->default_remake_config.min_ring = 0;
+    this->default_remake_config.max_ring = 127;
+    this->default_remake_config.vertical_bins = 128;
   }
   /* JT128 begin */ 
   else if (lidar_type == STR_OTHER) {
@@ -437,8 +447,8 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       float y = xyDistance * this->cos_all_angle_[(azimuth)];
       float z = distance * this->sin_all_angle_[(elevation)];
       this->TransformPoint(x, y, z, frame.fParam.transform);
-      int point_index_rerank = point_index + point_num; 
-      GeneralParser<T_Point>::DoRemake(azimuth, elevation, frame.fParam.remake_config, point_index_rerank); 
+      int point_index_rerank = point_index + point_num;
+      GeneralParser<T_Point>::DoRemake(azimuth, elevation, channel_index, frame.fParam.remake_config, point_index_rerank); 
       if(point_index_rerank >= 0) { 
         auto& ptinfo = frame.points[point_index_rerank]; 
         set_x(ptinfo, x); 
