@@ -1,5 +1,5 @@
-// OT128 RemakeConfig Test - Working Version
-// Tests ordered point cloud with RemakeConfig ENABLED
+// OT128 RemakeConfig Test - Ring-Based Version
+// Tests ordered point cloud with RemakeConfig ENABLED using ring-based vertical binning
 
 #include "hesai_lidar_sdk.hpp"
 #include <fstream>
@@ -32,10 +32,11 @@ void exportFrameToCSV(const LidarDecodedFrame<LidarPointXYZICRT>& frame,
     const auto& pt = frame.points[i];
     float dist = std::sqrt(pt.x * pt.x + pt.y * pt.y + pt.z * pt.z);
 
-    // Calculate row/col if we had grid info (we don't in SDK output)
-    // For now, just use sequential indexing
-    int row = i / 3600;  // Approximate grid position
-    int col = i % 3600;
+    // Calculate row/col from SDK grid layout (azimuth × ring storage)
+    // SDK stores as: point_idx = azimuth * 128 + ring
+    // Row = ring number (vertical: 0-127), Col = azimuth bin (horizontal: 0-3599)
+    int col = i / 128;   // Azimuth bin (horizontal position)
+    int row = i % 128;   // Ring number (vertical position, should equal pt.ring)
 
     file << i << "," << row << "," << col << ","
          << std::fixed << std::setprecision(3) << pt.x << ","
@@ -55,6 +56,27 @@ void analyzeFrame(const LidarDecodedFrame<LidarPointXYZICRT>& frame, int frame_n
   printf("\n=== OT128 RemakeConfig Frame %d ===\n", frame_num);
   printf("Points: %u\n", frame.points_num);
   printf("Packets: %u\n", frame.packet_num);
+  printf("Return mode: 0x%02X ", frame.return_mode);
+  if (frame.return_mode >= 0x39) {
+    printf("(Dual/Multi return)\n");
+  } else {
+    printf("(Single return)\n");
+  }
+
+  // Display RemakeConfig mode
+  if (frame.fParam.remake_config.use_ring_for_vertical) {
+    printf("RemakeConfig: Ring-based vertical binning\n");
+    printf("Vertical bins: %d (rings %d to %d)\n",
+           frame.fParam.remake_config.vertical_bins,
+           frame.fParam.remake_config.min_ring,
+           frame.fParam.remake_config.max_ring);
+  } else {
+    printf("RemakeConfig: Angle-based vertical binning\n");
+    printf("Vertical bins: %d (%.1f° to %.1f°)\n",
+           frame.fParam.remake_config.max_elev_scan,
+           frame.fParam.remake_config.min_elev,
+           frame.fParam.remake_config.max_elev);
+  }
 
   std::map<uint16_t, int> ring_counts;
   float min_dist = FLT_MAX, max_dist = 0;
@@ -80,16 +102,17 @@ void analyzeFrame(const LidarDecodedFrame<LidarPointXYZICRT>& frame, int frame_n
   printf("Valid: %d (%.1f%%), Zero-dist: %d\n",
          valid, 100.0f*valid/frame.points_num, zero_dist);
 
-  // Expected grid for OT128: 3600 x 320 = 1,152,000
-  int expected_grid_size = 3600 * 320;
+  // Expected grid for OT128 with ring-based mode: 128 x 3600 = 460,800
+  int expected_grid_size = 128 * 3600;
   if (frame.points_num != expected_grid_size) {
-    printf("⚠ WARNING: Expected %d points (3600x320 grid), got %u\n",
+    printf("⚠ WARNING: Expected %d points (128x3600 grid), got %u\n",
            expected_grid_size, frame.points_num);
   }
 
   float fill_rate = 100.0f * valid / frame.points_num;
-  if (fill_rate < 60.0f) {
-    printf("⚠ WARNING: Low fill rate (%.1f%%) - sparse grid!\n", fill_rate);
+  printf("Fill rate: %.1f%%\n", fill_rate);
+  if (fill_rate < 50.0f) {
+    printf("⚠ WARNING: Low fill rate - sparse grid!\n");
   }
 
   printf("=================================\n\n");
@@ -103,7 +126,7 @@ void lidarCallback(const LidarDecodedFrame<LidarPointXYZICRT>& frame) {
          GetMicroTimeU64(), frame.frame_index, frame.points_num, frame.packet_num);
 
   if (frame_counter < MAX_FRAMES_TO_EXPORT) {
-    std::string csv = "ot128_remakeconfig_frame_" + std::to_string(frame_counter) + ".csv";
+    std::string csv = "ot128_remakeconfig_ring_frame_" + std::to_string(frame_counter) + ".csv";
     exportFrameToCSV(frame, csv);
     analyzeFrame(frame, frame_counter);
   }
@@ -126,8 +149,10 @@ int main(int argc, char *argv[]) {
   // system("sudo sh -c \"echo 562144000 > /proc/sys/net/core/rmem_max\"");
 #endif
 
-  printf("\n=== OT128 RemakeConfig Test ===\n");
-  printf("Expected: 3600 x 320 grid (1,152,000 points)\n\n");
+  printf("\n=== OT128 RemakeConfig Test (Ring-Based) ===\n");
+  printf("Expected: 128 x 3600 grid (460,800 points)\n");
+  printf("Grid layout: 128 rows (rings) x 3600 cols (azimuth bins)\n");
+  printf("Using ring-based vertical binning\n\n");
 
   HesaiLidarSdk<LidarPointXYZICRT> sample;
   DriverParam param;
@@ -147,16 +172,12 @@ int main(int argc, char *argv[]) {
   // ENABLE RemakeConfig for ordered point cloud
   param.decoder_param.remake_config.flag = true;
 
-  // OT128 default configuration (from udp1_4_parser.cc)
-  param.decoder_param.remake_config.min_azi = 0.0f;
-  param.decoder_param.remake_config.max_azi = 360.0f;
-  param.decoder_param.remake_config.ring_azi_resolution = 0.1f;
-  param.decoder_param.remake_config.max_azi_scan = 3600;      // Width
-
-  param.decoder_param.remake_config.min_elev = -25.0f;
-  param.decoder_param.remake_config.max_elev = 15.0f;
-  param.decoder_param.remake_config.ring_elev_resolution = 0.125f;
-  param.decoder_param.remake_config.max_elev_scan = 320;      // Height
+  // Use OT128 defaults from udp1_4_parser.cc (ring-based vertical binning)
+  // The SDK will automatically apply:
+  //   - Horizontal: 3600 bins (0-360°, 0.1° resolution)
+  //   - Vertical: 128 bins (ring-based, rings 0-127)
+  //   - use_ring_for_vertical = true
+  // No explicit config needed - defaults are correct!
 #endif
 
   param.decoder_param.enable_packet_loss_tool = false;

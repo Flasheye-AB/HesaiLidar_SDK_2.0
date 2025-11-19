@@ -550,8 +550,15 @@ void GeneralParser<T_Point>::setRemakeDefaultConfig(LidarDecodedFrame<T_Point> &
   if (rq.ring_elev_resolution < 0) rq.ring_elev_resolution = default_remake_config.ring_elev_resolution;
   if (rq.max_elev_scan < 0) rq.max_elev_scan = default_remake_config.max_elev_scan;
 
-  // Ring-based vertical defaults
-  if (rq.use_ring_for_vertical && default_remake_config.use_ring_for_vertical) {
+  // Ring-based vertical defaults: copy flag from default config if not explicitly set
+  // This allows sensor-specific defaults (like OT128 ring-based) to be applied
+  // FIXME This might be wrong approach if user wants to turn it off for something that has it enabled. But I'll research how this is used later.
+  if (default_remake_config.use_ring_for_vertical && !rq.use_ring_for_vertical) {
+    // Default config wants ring-based, and user hasn't explicitly set it - use default
+    rq.use_ring_for_vertical = default_remake_config.use_ring_for_vertical;
+  }
+
+  if (rq.use_ring_for_vertical) {
     if (rq.min_ring < 0) rq.min_ring = default_remake_config.min_ring;
     if (rq.max_ring < 0) rq.max_ring = default_remake_config.max_ring;
     if (rq.vertical_bins < 0) rq.vertical_bins = default_remake_config.vertical_bins;
