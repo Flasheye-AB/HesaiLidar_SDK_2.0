@@ -68,6 +68,15 @@ Udp1_4Parser<T_Point>::Udp1_4Parser(std::string lidar_type) {
     this->default_remake_config.min_ring = 0;
     this->default_remake_config.max_ring = 127;
     this->default_remake_config.vertical_bins = 128;
+
+    // Sparse ring handling for OT128
+    // Rings 0-23: sparse (1800 azimuth values)
+    // Rings 24-87: dense (3600 azimuth values)
+    // Rings 88-127: sparse (1800 azimuth values)
+    this->default_remake_config.duplicate_sparse_rings = true;
+    this->default_remake_config.dense_ring_start = 24;
+    this->default_remake_config.dense_ring_end = 87;
+ 
   }
   /* JT128 begin */ 
   else if (lidar_type == STR_OTHER) {
@@ -448,22 +457,28 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       float z = distance * this->sin_all_angle_[(elevation)];
       this->TransformPoint(x, y, z, frame.fParam.transform);
       int point_index_rerank = point_index + point_num;
-      GeneralParser<T_Point>::DoRemake(azimuth, elevation, channel_index, frame.fParam.remake_config, point_index_rerank); 
+      int point_index_duplicate = -1;
+      GeneralParser<T_Point>::DoRemake(azimuth, elevation, channel_index, frame.fParam.remake_config, point_index_rerank, &point_index_duplicate); 
       if(point_index_rerank >= 0) { 
-        auto& ptinfo = frame.points[point_index_rerank]; 
-        set_x(ptinfo, x); 
-        set_y(ptinfo, y); 
-        set_z(ptinfo, z); 
-        set_ring(ptinfo, channel_index); 
-        set_intensity(ptinfo, pChnUnit->GetReflectivity());  
-        set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
-        set_timeSecond(ptinfo, timestamp / kNanosecondToSecondInt);
-        set_timeNanosecond(ptinfo, timestamp % kNanosecondToSecondInt);
-        set_confidence(ptinfo, confidence);
-        set_weightFactor(ptinfo, weightFactor);
-        set_envLight(ptinfo, envLight);
-
-        point_num++;
+        if(distance > 0) { // Only add points with data - avoid overwriting and unneeded writing
+          auto& ptinfo = frame.points[point_index_rerank]; 
+          set_x(ptinfo, x); 
+          set_y(ptinfo, y); 
+          set_z(ptinfo, z); 
+          set_ring(ptinfo, channel_index); 
+          set_intensity(ptinfo, pChnUnit->GetReflectivity());  
+          set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
+          set_timeSecond(ptinfo, timestamp / kNanosecondToSecondInt);
+          set_timeNanosecond(ptinfo, timestamp % kNanosecondToSecondInt);
+          set_confidence(ptinfo, confidence);
+          set_weightFactor(ptinfo, weightFactor);
+          set_envLight(ptinfo, envLight);
+          point_num++;
+          if(point_index_duplicate >= 0) { 
+            frame.points[point_index_duplicate] = ptinfo;
+            point_num++; // Should we increase point_num for duplicate points? 
+          } 
+        }
       }
     }
   }

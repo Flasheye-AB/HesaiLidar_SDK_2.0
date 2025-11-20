@@ -235,7 +235,7 @@ class GeneralParser {
   uint32_t CRCCalc(const uint8_t *bytes, int len, int zeros_num);
   // remake
   void setRemakeDefaultConfig(LidarDecodedFrame<T_Point> &frame);
-  void DoRemake(int azi, int elev, int ring, const RemakeConfig& rq, int& point_idx);
+  void DoRemake(int azi, int elev, int ring, const RemakeConfig& rq, int& point_idx, int *duplicate_point_idx=nullptr);
   // update right memory space
   virtual void setFrameRightMemorySpace(LidarDecodedFrame<T_Point> &frame);
   // used for updating cuda correction and firetime by itself

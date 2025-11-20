@@ -1,5 +1,7 @@
-// OT128 RemakeConfig Test - Ring-Based Version
-// Tests ordered point cloud with RemakeConfig ENABLED using ring-based vertical binning
+// OT128 RemakeConfig Test - Ring-Based with Sparse Ring Filling
+// Tests ordered point cloud with RemakeConfig ENABLED using:
+// - Ring-based vertical binning (128 bins, one per physical ring)
+// - Sparse ring duplication (fills gaps in outer rings by duplicating to adjacent azimuth bins)
 
 #include "hesai_lidar_sdk.hpp"
 #include <fstream>
@@ -78,6 +80,19 @@ void analyzeFrame(const LidarDecodedFrame<LidarPointXYZICRT>& frame, int frame_n
            frame.fParam.remake_config.max_elev);
   }
 
+  // Display sparse ring handling
+  if (frame.fParam.remake_config.duplicate_sparse_rings) {
+    printf("Sparse rings: Duplicating to adjacent azimuth bins\n");
+    printf("Dense rings: %d to %d\n",
+           frame.fParam.remake_config.dense_ring_start,
+           frame.fParam.remake_config.dense_ring_end);
+    printf("Sparse rings: 0-%d and %d-127\n",
+           frame.fParam.remake_config.dense_ring_start - 1,
+           frame.fParam.remake_config.dense_ring_end + 1);
+  } else {
+    printf("Sparse rings: No duplication\n");
+  }
+
   std::map<uint16_t, int> ring_counts;
   float min_dist = FLT_MAX, max_dist = 0;
   int zero_dist = 0, valid = 0;
@@ -126,7 +141,7 @@ void lidarCallback(const LidarDecodedFrame<LidarPointXYZICRT>& frame) {
          GetMicroTimeU64(), frame.frame_index, frame.points_num, frame.packet_num);
 
   if (frame_counter < MAX_FRAMES_TO_EXPORT) {
-    std::string csv = "ot128_remakeconfig_ring_frame_" + std::to_string(frame_counter) + ".csv";
+    std::string csv = "ot128_remakeconfig_filled_frame_" + std::to_string(frame_counter) + ".csv";
     exportFrameToCSV(frame, csv);
     analyzeFrame(frame, frame_counter);
   }
@@ -149,10 +164,11 @@ int main(int argc, char *argv[]) {
   // system("sudo sh -c \"echo 562144000 > /proc/sys/net/core/rmem_max\"");
 #endif
 
-  printf("\n=== OT128 RemakeConfig Test (Ring-Based) ===\n");
+  printf("\n=== OT128 RemakeConfig Test (Ring-Based + Sparse Fill) ===\n");
   printf("Expected: 128 x 3600 grid (460,800 points)\n");
   printf("Grid layout: 128 rows (rings) x 3600 cols (azimuth bins)\n");
-  printf("Using ring-based vertical binning\n\n");
+  printf("Using ring-based vertical binning with sparse ring duplication\n");
+  printf("Sparse rings (0-23, 88-127) duplicated to adjacent azimuth bins\n\n");
 
   HesaiLidarSdk<LidarPointXYZICRT> sample;
   DriverParam param;
