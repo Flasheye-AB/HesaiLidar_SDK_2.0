@@ -64,7 +64,7 @@ Udp1_4Parser<T_Point>::Udp1_4Parser(std::string lidar_type) {
     this->default_remake_config.max_elev_scan = 320;   // (max_elev - min_elev) / ring_elev_resolution
 
     // Ring-based vertical binning (NEW for OT128)
-    this->default_remake_config.use_ring_for_vertical = true;
+    this->default_remake_config.use_ring_for_vertical = false;
     this->default_remake_config.min_ring = 0;
     this->default_remake_config.max_ring = 127;
     this->default_remake_config.vertical_bins = 128;
@@ -73,7 +73,7 @@ Udp1_4Parser<T_Point>::Udp1_4Parser(std::string lidar_type) {
     // Rings 0-23: sparse (1800 azimuth values)
     // Rings 24-87: dense (3600 azimuth values)
     // Rings 88-127: sparse (1800 azimuth values)
-    this->default_remake_config.duplicate_sparse_rings = true;
+    this->default_remake_config.duplicate_sparse_rings = false;
     this->default_remake_config.dense_ring_start = 24;
     this->default_remake_config.dense_ring_end = 87;
  
