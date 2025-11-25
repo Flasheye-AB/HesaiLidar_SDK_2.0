@@ -581,6 +581,7 @@ void GeneralParser<T_Point>::setRemakeDefaultConfig(LidarDecodedFrame<T_Point> &
   }
 }
 
+// 2025-11-24: Changed ordering from column-major to row-major for better standard compliance
 template <typename T_Point>
 void GeneralParser<T_Point>::DoRemake(int azi, int elev, int ring, const RemakeConfig& rq, int& point_idx, int *duplicate_point_idx) {
   if (rq.flag == false) return;
@@ -601,15 +602,15 @@ void GeneralParser<T_Point>::DoRemake(int azi, int elev, int ring, const RemakeC
     // Calculate grid index
     if(rq.duplicate_sparse_rings && (ring < rq.dense_ring_start || ring > rq.dense_ring_end)) {
       // Handle sparse rings by duplicating points into dense grid
-      // Sparse region: duplicate into two nearest dense bins
+      // Sparse region: duplicate into two nearest dense bins at odd and even index
       int even_azi_iscan = (int(((unsigned int)new_azi_iscan) & 0xFFFFFFFE));  // Ensure even azimuth index for duplication
-      point_idx           =  even_azi_iscan      * rq.vertical_bins + new_elev_iscan;
+      point_idx           =  new_elev_iscan * rq.max_azi_scan + even_azi_iscan;
       int odd_azi_iscan = even_azi_iscan + 1;
       if (odd_azi_iscan < 0 || odd_azi_iscan >= rq.max_azi_scan) return;
-      if(duplicate_point_idx) *duplicate_point_idx = (odd_azi_iscan) * rq.vertical_bins + new_elev_iscan;
+      if(duplicate_point_idx) *duplicate_point_idx = (new_elev_iscan) * rq.max_azi_scan + odd_azi_iscan;
     } else {
       // No duplication, direct mapping
-      point_idx = new_azi_iscan * rq.vertical_bins + new_elev_iscan;
+      point_idx = new_elev_iscan * rq.max_azi_scan + new_azi_iscan;
     }
   } else {
     // Angle-based vertical binning (original behavior)
@@ -618,7 +619,7 @@ void GeneralParser<T_Point>::DoRemake(int azi, int elev, int ring, const RemakeC
     new_elev_iscan = (elev_ - rq.min_elev) / rq.ring_elev_resolution;
     if (new_elev_iscan < 0 || new_elev_iscan >= rq.max_elev_scan) return;
     // Calculate grid index
-    point_idx = new_azi_iscan * rq.max_elev_scan + new_elev_iscan;
+    point_idx = new_elev_iscan * rq.max_azi_scan + new_azi_iscan;
   }
 
 }
