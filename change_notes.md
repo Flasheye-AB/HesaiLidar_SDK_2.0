@@ -1,5 +1,17 @@
 # HesaiLidar_SDK_2.0
 
+## Preliminary
+
+### Tuesday November 25th, 2025 
+
+### Added
+1. OT128: Ring-based vertical binning (use_ring_for_vertical): Instead of binning by elevation angle (which creates a sparse 320-row grid due to OT128's non-uniform vertical resolution), bin by physical ring/channel number to create a dense 128-row grid. Vertical axis is in ring order, not elevation order.
+2. OT128: Sparse ring duplication (duplicate_sparse_rings): OT128's outer rings (0-23 and 88-127) only sample every other azimuth position. This feature duplicates those points to fill the gaps, giving a complete grid without holes.
+
+### Changed
+1. The rearranged point cloud is now row-major, not column-major.
+
+
 ## V2.0.11
 
 ### Wednesday November 5th, 2025 16:30:00
