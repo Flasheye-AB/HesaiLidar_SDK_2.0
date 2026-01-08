@@ -478,6 +478,14 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
             frame.points[point_index_duplicate] = ptinfo;
             point_num++; // Should we increase point_num for duplicate points? 
           } 
+        } else {
+          // Always set timestamp for visited grid positions (even with no return)
+          auto& ptinfo = frame.points[point_index_rerank]; 
+          if(ptinfo.timestamp == 0.0) {
+            set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
+            set_timeSecond(ptinfo, timestamp / kNanosecondToSecondInt);
+            set_timeNanosecond(ptinfo, timestamp % kNanosecondToSecondInt);
+          }
         }
       }
     }
