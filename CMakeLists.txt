@@ -82,3 +82,8 @@ else()
 		hesai_sdk_lib
 		)
 endif()
+
+# Install hesai_sdk_lib
+install(TARGETS hesai_sdk_lib
+    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+)
