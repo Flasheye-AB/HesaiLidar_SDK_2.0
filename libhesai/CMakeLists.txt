@@ -245,3 +245,15 @@ if (WITH_LIDARLIB)
     
 endif(WITH_LIDARLIB)
 
+# Install all shared libraries
+install(TARGETS 
+    log_lib
+    platutils_lib
+    udpParser_lib
+    ptcClient_lib
+    someipClient_lib
+    source_lib
+    serialClient_lib
+    lidar_lib
+    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+)

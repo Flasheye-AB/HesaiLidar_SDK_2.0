@@ -537,35 +537,91 @@ template <typename T_Point>
 void GeneralParser<T_Point>::setRemakeDefaultConfig(LidarDecodedFrame<T_Point> &frame) {
   auto &rq = frame.fParam.remake_config;
   if (rq.flag == false) return;
+
+  // Horizontal (azimuth) configuration
   if (rq.min_azi < 0) rq.min_azi = default_remake_config.min_azi;
   if (rq.max_azi < 0) rq.max_azi = default_remake_config.max_azi;
   if (rq.ring_azi_resolution < 0) rq.ring_azi_resolution = default_remake_config.ring_azi_resolution;
   if (rq.max_azi_scan < 0) rq.max_azi_scan = default_remake_config.max_azi_scan;
 
+  // Vertical configuration: apply defaults for both angle-based and ring-based
   if (rq.min_elev < 0) rq.min_elev = default_remake_config.min_elev;
   if (rq.max_elev < 0) rq.max_elev = default_remake_config.max_elev;
   if (rq.ring_elev_resolution < 0) rq.ring_elev_resolution = default_remake_config.ring_elev_resolution;
   if (rq.max_elev_scan < 0) rq.max_elev_scan = default_remake_config.max_elev_scan;
 
-  if (static_cast<uint32_t>(rq.max_azi_scan) > frame.maxPacketPerFrame || static_cast<uint32_t>(rq.max_elev_scan) > frame.maxPointPerPacket) {
+  // Ring-based vertical defaults: copy flag from default config if not explicitly set
+  // This allows sensor-specific defaults (like OT128 ring-based) to be applied
+  // FIXME This might be wrong approach if user wants to turn it off for something that has it enabled. But I'll research how this is used later.
+  if (default_remake_config.use_ring_for_vertical && !rq.use_ring_for_vertical) {
+    // Default config wants ring-based, and user hasn't explicitly set it - use default
+    rq.use_ring_for_vertical = default_remake_config.use_ring_for_vertical;
+  }
+
+  if (rq.use_ring_for_vertical) {
+    if (rq.min_ring < 0) rq.min_ring = default_remake_config.min_ring;
+    if (rq.max_ring < 0) rq.max_ring = default_remake_config.max_ring;
+    if (rq.vertical_bins < 0) rq.vertical_bins = default_remake_config.vertical_bins;
+    if (!rq.duplicate_sparse_rings && default_remake_config.duplicate_sparse_rings) {
+      rq.duplicate_sparse_rings = default_remake_config.duplicate_sparse_rings;
+      if (rq.dense_ring_start < 0) rq.dense_ring_start = default_remake_config.dense_ring_start;
+      if (rq.dense_ring_end < 0) rq.dense_ring_end = default_remake_config.dense_ring_end;
+    }
+  }
+
+  // Determine actual vertical size for memory allocation
+  int vertical_size = rq.use_ring_for_vertical ? rq.vertical_bins : rq.max_elev_scan;
+
+  // Allocate memory if needed
+  if (static_cast<uint32_t>(rq.max_azi_scan) > frame.maxPacketPerFrame ||
+      static_cast<uint32_t>(vertical_size) > frame.maxPointPerPacket) {
     int max_azi = HS_MAX(static_cast<uint32_t>(rq.max_azi_scan), frame.maxPacketPerFrame);
-    int max_elev = HS_MAX(static_cast<uint32_t>(rq.max_elev_scan), frame.maxPointPerPacket);
+    int max_elev = HS_MAX(static_cast<uint32_t>(vertical_size), frame.maxPointPerPacket);
     frame.resetMalloc(max_azi, max_elev);
   }
 }
 
+// 2025-11-24: Changed ordering from column-major to row-major for better standard compliance
 template <typename T_Point>
-void GeneralParser<T_Point>::DoRemake(int azi, int elev, const RemakeConfig& rq, int& point_idx) {
+void GeneralParser<T_Point>::DoRemake(int azi, int elev, int ring, const RemakeConfig& rq, int& point_idx, int *duplicate_point_idx) {
   if (rq.flag == false) return;
   float azi_ = azi / kAllFineResolutionFloat;
-  float elev_ = elev / kAllFineResolutionFloat;
-  elev_ = elev_ > 180.0 ? elev_ - 360.0 : elev_;
   point_idx = -1;
+  if(duplicate_point_idx) *duplicate_point_idx = -1;
+
+  // Horizontal binning (always angle-based)
   int new_azi_iscan = (azi_ - rq.min_azi) / rq.ring_azi_resolution;
-  int new_elev_iscan = (elev_ - rq.min_elev) / rq.ring_elev_resolution;
-  if (new_azi_iscan >= 0 && new_azi_iscan < rq.max_azi_scan && new_elev_iscan >= 0 && new_elev_iscan < rq.max_elev_scan) {
-    point_idx = new_azi_iscan * rq.max_elev_scan + new_elev_iscan;
+  if (new_azi_iscan < 0 || new_azi_iscan >= rq.max_azi_scan) return;
+
+  // Vertical binning: choose between ring-based or angle-based
+  int new_elev_iscan;
+  if (rq.use_ring_for_vertical) {
+    // Ring-based vertical binning
+    new_elev_iscan = ring - rq.min_ring;
+    if (new_elev_iscan < 0 || new_elev_iscan >= rq.vertical_bins) return;
+    // Calculate grid index
+    if(rq.duplicate_sparse_rings && (ring < rq.dense_ring_start || ring > rq.dense_ring_end)) {
+      // Handle sparse rings by duplicating points into dense grid
+      // Sparse region: duplicate into two nearest dense bins at odd and even index
+      int even_azi_iscan = (int(((unsigned int)new_azi_iscan) & 0xFFFFFFFE));  // Ensure even azimuth index for duplication
+      point_idx           =  new_elev_iscan * rq.max_azi_scan + even_azi_iscan;
+      int odd_azi_iscan = even_azi_iscan + 1;
+      if (odd_azi_iscan < 0 || odd_azi_iscan >= rq.max_azi_scan) return;
+      if(duplicate_point_idx) *duplicate_point_idx = (new_elev_iscan) * rq.max_azi_scan + odd_azi_iscan;
+    } else {
+      // No duplication, direct mapping
+      point_idx = new_elev_iscan * rq.max_azi_scan + new_azi_iscan;
+    }
+  } else {
+    // Angle-based vertical binning (original behavior)
+    float elev_ = elev / kAllFineResolutionFloat;
+    elev_ = elev_ > 180.0 ? elev_ - 360.0 : elev_;
+    new_elev_iscan = (elev_ - rq.min_elev) / rq.ring_elev_resolution;
+    if (new_elev_iscan < 0 || new_elev_iscan >= rq.max_elev_scan) return;
+    // Calculate grid index
+    point_idx = new_elev_iscan * rq.max_azi_scan + new_azi_iscan;
   }
+
 }
 
 template <typename T_Point>

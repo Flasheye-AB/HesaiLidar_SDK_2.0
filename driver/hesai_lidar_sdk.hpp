@@ -298,7 +298,9 @@ public:
         }
         if (lidar_ptr_->frame_.fParam.remake_config.flag) {
           auto& rq = lidar_ptr_->frame_.fParam.remake_config;
-          lidar_ptr_->frame_.points_num = rq.max_azi_scan * rq.max_elev_scan;
+          // Use vertical_bins if ring-based mode, otherwise use max_elev_scan
+          int vertical_size = rq.use_ring_for_vertical ? rq.vertical_bins : rq.max_elev_scan;
+          lidar_ptr_->frame_.points_num = rq.max_azi_scan * vertical_size;
         }
         if (lidar_ptr_->frame_.points_num == 0) {
           uint32_t points_num = 0;

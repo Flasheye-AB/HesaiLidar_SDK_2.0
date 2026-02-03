@@ -1,5 +1,31 @@
 # HesaiLidar_SDK_2.0
 
+## V2.??
+
+### February 2025 (Flasheye modifications)
+
+### Added
+1. OT128: Ring-based vertical binning (use_ring_for_vertical): Instead of binning by 
+   elevation angle (which creates a sparse 320-row grid due to OT128's non-uniform 
+   vertical resolution), bin by physical ring/channel number to create a dense 128-row 
+   grid. Vertical axis is in ring order, not elevation order.
+2. OT128: Optional sparse ring duplication (duplicate_sparse_rings): OT128's outer rings (0-23 
+   and 88-127) only sample every other azimuth position. This feature duplicates those 
+   points to fill the gaps, giving a complete grid without holes.
+3. CMake install() rules for all shared libraries (libptcClient_lib.so, libudpParser_lib.so, 
+   etc.) to support catkin_make install and distribution packaging.
+
+### Changed
+1. The rearranged point cloud is now row-major, not column-major.
+2. Timestamp is now set for grid positions even when distance=0, ensuring all visited 
+   positions have valid timestamps.
+
+### Config options (via ROS driver config.yaml)
+- remake_config.enabled: Enable ordered grid output
+- remake_config.use_ring_for_vertical: Use ring index instead of elevation angle
+- remake_config.duplicate_sparse_rings: Fill gaps in sparse ring regions
+- remake_config.echo_mode_filter: 0=all returns, 1=first only, 2=second only
+
 ## V2.0.11
 
 ### Wednesday November 5th, 2025 16:30:00

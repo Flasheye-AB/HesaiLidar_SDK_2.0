@@ -46,6 +46,16 @@ Udp4_3Parser<T_Point>::Udp4_3Parser() {
   this->default_remake_config.max_elev = 13.f;
   this->default_remake_config.ring_elev_resolution = 0.2f;
   this->default_remake_config.max_elev_scan = 130;   // (max_elev - min_elev) / ring_elev_resolution
+
+  // Ring-based vertical binning for AT128
+  this->default_remake_config.use_ring_for_vertical = false;
+  this->default_remake_config.min_ring = 0;
+  this->default_remake_config.max_ring = 127;
+  this->default_remake_config.vertical_bins = 128;
+
+  // Sparse ring handling off for AT128
+  this->default_remake_config.duplicate_sparse_rings = false;
+
   LogInfo("init 4_3 parser");
 }
 
@@ -229,8 +239,8 @@ int Udp4_3Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
     this->TransformPoint(x, y, z, frame.fParam.transform);
 
 
-    int point_index_rerank = point_index + point_num; 
-    GeneralParser<T_Point>::DoRemake(azimuth, elevation, frame.fParam.remake_config, point_index_rerank); 
+    int point_index_rerank = point_index + point_num;
+    GeneralParser<T_Point>::DoRemake(azimuth, elevation, channel_index, frame.fParam.remake_config, point_index_rerank); 
     if(point_index_rerank >= 0) { 
       auto& ptinfo = frame.points[point_index_rerank]; 
       set_x(ptinfo, x); 

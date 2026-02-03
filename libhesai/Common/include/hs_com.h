@@ -79,6 +79,19 @@ struct RemakeConfig {
   float max_elev = -1;
   float ring_elev_resolution = -1;
   int max_elev_scan = -1;   // (max_elev - min_elev) / ring_elev_resolution
+
+  // Ring-based vertical binning (alternative to elevation angle binning)
+  bool use_ring_for_vertical = false;  // If true, use ring number instead of elevation angle
+  int min_ring = 0;                    
+  int max_ring = -1;                   
+  int vertical_bins = -1;              // Normally max_ring+1-min_ring
+
+  // Sparse ring handling: duplicate points to adjacent azimuth bins
+  // Only used ny OT128 udp1_4_parser.cc
+  bool duplicate_sparse_rings = false;  // Activate function, oinly applies when use_ring_for_vertical is true
+  int dense_ring_start = -1;            // First ring with full azimuth coverage (e.g., 24 for OT128)
+  int dense_ring_end = -1;              // Last ring with full azimuth coverage (e.g., 87 for OT128)
+
 };
 
 
