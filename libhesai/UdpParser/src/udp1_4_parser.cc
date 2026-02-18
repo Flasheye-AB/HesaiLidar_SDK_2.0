@@ -88,6 +88,11 @@ Udp1_4Parser<T_Point>::Udp1_4Parser(std::string lidar_type) {
     this->default_remake_config.max_elev = 90.5f;
     this->default_remake_config.ring_elev_resolution = 0.73f;
     this->default_remake_config.max_elev_scan = 130;   // (max_elev - min_elev) / ring_elev_resolution
+    // Ring-based vertical binning (NEW for JT128)
+    this->default_remake_config.use_ring_for_vertical = true;  // default off
+    this->default_remake_config.min_ring = 0;
+    this->default_remake_config.max_ring = 127;
+    this->default_remake_config.vertical_bins = 128;
   }
   /* JT128 end */
   LogInfo("init 1_4 parser (%s)", lidar_type.c_str());
