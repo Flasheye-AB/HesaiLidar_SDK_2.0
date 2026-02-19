@@ -88,6 +88,11 @@ Udp1_4Parser<T_Point>::Udp1_4Parser(std::string lidar_type) {
     this->default_remake_config.max_elev = 90.5f;
     this->default_remake_config.ring_elev_resolution = 0.73f;
     this->default_remake_config.max_elev_scan = 130;   // (max_elev - min_elev) / ring_elev_resolution
+    // Ring-based vertical binning (NEW for JT128)
+    this->default_remake_config.use_ring_for_vertical = true;  // default off
+    this->default_remake_config.min_ring = 0;
+    this->default_remake_config.max_ring = 127;
+    this->default_remake_config.vertical_bins = 128;
   }
   /* JT128 end */
   LogInfo("init 1_4 parser (%s)", lidar_type.c_str());
@@ -397,7 +402,8 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
     }
     /* JT128 begin */ 
     else if (this->lidar_type_ == STR_OTHER) {
-      block_ns_offset = PandarN::OTHER_BLOCK_NS_OFFSET2 * int((frame.block_num - blockid - 1) / (frame.return_mode < RETURN_MODE_MULTI ? 1 : 2));
+//      block_ns_offset = PandarN::OTHER_BLOCK_NS_OFFSET2 * int((frame.block_num - blockid - 1) / (frame.return_mode < RETURN_MODE_MULTI ? 1 : 2));
+      block_ns_offset = PandarN::OTHER_BLOCK_NS_OFFSET1 + PandarN::OTHER_BLOCK_NS_OFFSET2 * int((frame.block_num - blockid - 1) / (frame.return_mode < RETURN_MODE_MULTI ? 1 : 2));
     }
     /* JT128 end */
     else {

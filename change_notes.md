@@ -1,8 +1,8 @@
 # HesaiLidar_SDK_2.0
 
-## V2.??
+## V2.0.11Flasheye
 
-### February 2025 (Flasheye modifications)
+### February 2026 (Flasheye modifications)
 
 ### Added
 1. OT128: Ring-based vertical binning (use_ring_for_vertical): Instead of binning by 
