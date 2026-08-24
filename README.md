@@ -6,11 +6,13 @@
 
 ### 1.1 Lidar Models
 
-| Pandar       | OT    | QT       | XT          | AT       | FT    | JT    |
-|:-------------|:------|:---------|:------------|:---------|:------|:------|
-| Pandar40P    | OT128 | PandarQT | PandarXT    | AT128E2X | FT120 | JT16  |
-| Pandar64     | -     | QT128C2X | PandarXT-16 | AT128P   | -     | JT128 |
-| Pandar128E3X | -     | -        | XT32M2X     | ATX      | -     | -     |
+| Pandar       | OT           | QT           | XT           | AT           | FT           | JT           |
+|:------------|:------------|:------------|:------------|:------------|:------------|:------------|
+| Pandar40P    | OT128        | PandarQT     | PandarXT     | AT128E2X     | FT120        | JT128        |
+| Pandar40M    | OT128_40     | QT128C2X     | PandarXT-16  | AT128P       | FTX          | JT64P        |
+| Pandar64     | -            | -            | XT32M2X      | ATX          | -            | JT16         |
+| Pandar128E3X | -            | -            | -            | -            | -            | -            |
+| Pandar90E3X  | -            | -            | -            | -            | -            | -            |
 
 ### 1.2 Operating Systems
 
@@ -137,11 +139,6 @@ Please use the LidarPointXYZICRTT structure to declare HesaiLidarSdk, where uint
 
 ### 3.15 Point Cloud Rearrangement Based on Horizontal and Vertical Angles
 Please refer to **[Point Cloud Rearrangement Function](docs/point_cloud_rearrangement_function.md)**
-
-### 3.16 Point Cloud Rearrangement Based on Horizontal and Vertical Rings
-For the OT128 the scan pattern has varying density over different parts of the field of view. The rearrangement of points described in 3.15 will leave large empty areas in the grid meaning more than half of the reported points are 0 and the grid has gaps that can confuse algorithms.
-The config settings now allow ring based verical range giving a dense grid. This can also be combined with double points to fill the areas with half sample rate.
-Ring based rearrangement is currently not supported on GPU. 
 
 ## 4 Functional Parameter Reference
 Please refer to **[Functional Parameter Reference](docs/parameter_introduction.md)**.

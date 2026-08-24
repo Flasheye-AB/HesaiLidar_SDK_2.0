@@ -1,30 +1,57 @@
 # HesaiLidar_SDK_2.0
 
-## V2.0.11Flasheye
+## V2.0.12
 
-### February 2026 (Flasheye modifications)
+### Tuesday April 1st, 2026 16:00:00
 
 ### Added
-1. OT128: Ring-based vertical binning (use_ring_for_vertical): Instead of binning by 
-   elevation angle (which creates a sparse 320-row grid due to OT128's non-uniform 
-   vertical resolution), bin by physical ring/channel number to create a dense 128-row 
-   grid. Vertical axis is in ring order, not elevation order.
-2. OT128: Optional sparse ring duplication (duplicate_sparse_rings): OT128's outer rings (0-23 
-   and 88-127) only sample every other azimuth position. This feature duplicates those 
-   points to fill the gaps, giving a complete grid without holes.
-3. CMake install() rules for all shared libraries (libptcClient_lib.so, libudpParser_lib.so, 
-   etc.) to support catkin_make install and distribution packaging.
+1. Added support for FTX (protocol 7_3) parsing.
+2. Added `every_pkt_cb_` callback to receive each UDP packet with timestamp (`RegRecvCallback(const std::function<void(const UdpPacket&, double)>&)`).
+3. Added `set_xxx_lazy` macros for lazy evaluation of point cloud fields (azimuthCalib, elevation, elevationCalib).
+4. Added `LastUtcTime` struct for optimized UTC time caching.
+5. Added `Crc32` class for CRC-32 checksum calculation.
+6. Added `LidarPointXYZJT128` point struct with additional fields (confidence, weightFactor, dirtyLevel, noiseLevel, envLight).
+7. Added `LidarPointAAEEDI` point struct for azimuth/elevation/distance/intensity data.
+8. Added `AlgorithmUseData` struct for algorithm-specific data (enabled via `ALGORITHM_USE_DATA` macro).
+9. Added `FaultMessageInfo7_3` for FTX fault message parsing.
+10. Added `save_valid_points_only` configuration option in pcl_tool to filter out zero points.
+11. Added `output_dir` and `output_dir_with_timestamp` configuration options for pcl_tool and las_tool.
+12. Added INI-based configuration support for test.cc, pcl_tool.cc, las_tool.cc, and multi_test.cc.
+13. Added `config/driver_sample_config.hpp` configuration parser library.
+14. Added SDK version auto-generation via CMake (`sdk_version.hpp.in` → `sdk_version.hpp`).
+15. Added build configuration summary output in CMake.
+16. Added modular CMakeLists.txt for each libhesai submodule.
 
 ### Changed
-1. The rearranged point cloud is now row-major, not column-major.
-2. Timestamp is now set for grid positions even when distance=0, ensuring all visited 
-   positions have valid timestamps.
+1. Upgraded C++ standard from C++14 to C++17.
+2. Refactored `hesai_sdk_lib` from static library to INTERFACE (header-only template library).
+3. Refactored all UDP parsers from .cc/.h to header-only implementation (.h files contain full implementation).
+4. Refactored `Lidar` class from lidar.cc to header-only template in lidar.h.
+5. Refactored libhesai CMakeLists.txt into modular subdirectories (Logger, Common, UdpParser, PtcClient, Source, SerialClient, Lidar).
+6. Changed raw pointers to `std::shared_ptr` in HesaiLidarSdk for better memory management (`lidar_ptr_`, `runing_thread_ptr_`, `init_thread_ptr_`).
+7. Renamed `SHA256_USE` class to `SHA256`.
+8. Changed `channel_fov_filter` type from `std::map<int, std::vector<std::pair<int, int>>>` to `std::map<int, std::vector<std::pair<float, float>>>` for higher FOV precision.
+9. Added `use_ring_remake` field to `RemakeConfig` struct.
+10. Moved `FrameProcess()` call before point cloud compaction in SDK Run loop.
+11. Updated LICENSE file with third-party dependency licensing clarification (OpenSSL, libpcap, PCL, LASlib, CUDA).
+12. Updated README/README_CN radar model tables with additional models (Pandar40M, Pandar90E3X, OT128_40, FTX, etc.).
+13. Changed default `correction_file_path` and `firetimes_path` to empty string instead of placeholder text.
+14. Changed `ros_send_firetime_topic` to `ros_send_every_packet_topic` for per-packet ROS topic.
+15. Integrated packet loss reporting functionality directly into test.cc (removed standalone packet_loss_tool.cc).
 
-### Config options (via ROS driver config.yaml)
-- remake_config.enabled: Enable ordered grid output
-- remake_config.use_ring_for_vertical: Use ring index instead of elevation angle
-- remake_config.duplicate_sparse_rings: Fill gaps in sparse ring regions
-- remake_config.echo_mode_filter: 0=all returns, 1=first only, 2=second only
+### Fixed
+1. Added `frame_decode_mutex_` mutex lock to protect frame decoding from race conditions in multi-threaded scenarios.
+2. Added warning log when CUDA parser returns error or points_num is low.
+3. Fixed early return before mutex unlock in lidarCallback when frame.points_num == 0.
+
+### Removed
+1. Removed `driver/hesai_lidar_sdk.cc` (merged into header-only implementation).
+2. Removed `libhesai/Lidar/lidar.cc` (converted to header-only template).
+3. Removed all `libhesai/UdpParser/src/*.cc` files (merged into header files).
+4. Removed `libhesai/UdpParser/udp_parser.cc` (merged into udp_parser.h).
+5. Removed `tool/packet_loss_tool.cc` (functionality merged into test.cc).
+6. Removed redundant angle correction files (PandarXT_Angle Correction File.csv, XT32M2X_Angle Correction File.csv).
+7. Removed `LidarPointRTHI` struct (replaced by `LidarPointAAEEDI`).
 
 ## V2.0.11
 
@@ -33,17 +60,15 @@
 ### Added
 1. Added function examples for backfilling point cloud data packets in EXTERNAL_INPUT_PARSER_TEST mode.
 2. Added support for JT128 parsing.
-3. Added tcp_source file for receiving TCP point cloud data streams.
-4. Added support for parsing PCAP files with different definitions.
-5. Added someip file for subscribing to and parsing SOME/IP-related data.
-6. Added a new serial upgrade function for JT16, named RequestUpgradeLargePackage.
-7. Added play_rate_ feature to control PCAP playback rate, with a default value of 1.0 representing 1x playback speed.
-8. Added channel_fov_filter_path feature to configure FOV files for filtering point cloud data with multiple FOVs under multiple channels.
-9. Added multi_fov_filter_ranges feature to configure FOV files for filtering point cloud data with multiple FOVs across all channels.
-10. Added frame_frequency feature to configure point cloud publishing frequency, requiring manual configuration of default_frame_frequency to the actual point cloud publishing frequency.
-11. Added host_ptc_port feature to configure the local port when connecting to PTC.
-12. Added update_function_safety_flag feature; when enabled, function safety parsing results can be obtained by accessing the funcSafety struct (supported by some mechanical LiDARs).
-13. Added echo_mode_filter feature to configure echo mode filtering, with a default value of 0 indicating no filtering.
+3. Added support for parsing PCAP files with different definitions.
+4. Added a new serial upgrade function for JT16, named RequestUpgradeLargePackage.
+5. Added play_rate_ feature to control PCAP playback rate, with a default value of 1.0 representing 1x playback speed.
+6. Added channel_fov_filter_path feature to configure FOV files for filtering point cloud data with multiple FOVs under multiple channels.
+7. Added multi_fov_filter_ranges feature to configure FOV files for filtering point cloud data with multiple FOVs across all channels.
+8. Added frame_frequency feature to configure point cloud publishing frequency, requiring manual configuration of default_frame_frequency to the actual point cloud publishing frequency.
+9. Added host_ptc_port feature to configure the local port when connecting to PTC.
+10. Added update_function_safety_flag feature; when enabled, function safety parsing results can be obtained by accessing the funcSafety struct (supported by some mechanical LiDARs).
+11. Added echo_mode_filter feature to configure echo mode filtering, with a default value of 0 indicating no filtering.
 
 ### Fix
 1. Modified the exported PCL struct definition in pcl_tool.cc to meet Windows compilation requirements.
