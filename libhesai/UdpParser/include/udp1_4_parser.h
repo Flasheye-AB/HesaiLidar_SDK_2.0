@@ -451,11 +451,23 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       /* JT128 begin */
         dirtyLevel = (weightFactor >> 6) & 0x3;
         noiseLevel = weightFactor & 0b00111111;
+        // Add JT128 blockage detection
+        if (this->lidar_type_ == STR_OTHER && dirtyLevel > 0) {
+          frame.frame_blockages_.push_back({static_cast<uint32_t>(channel_index), static_cast<uint16_t>(dirtyLevel)});
+        }
       /* JT128 end */
       }
       if (hasEnvLight(pHeader->m_u8Status)) envLight = pChnUnit->reserved[k];
 
-      float distance = static_cast<float>(pChnUnit->GetDistance() * frame.distance_unit);
+      uint16_t raw_dist = pChnUnit->GetDistance();
+      // Add OT128 blockage detection
+      if (this->lidar_type_ == STR_OT128 && this->enable_ot128_blockage_parsing_) {
+        if (raw_dist > 0 && raw_dist < 75) {
+          frame.frame_blockages_.push_back({static_cast<uint32_t>(channel_index), raw_dist});
+          continue; // Skip rendering this point so it does not produce ghost points
+        }
+      }
+      float distance = static_cast<float>(raw_dist * frame.distance_unit);
       if (this->get_firetime_file_ && frame.fParam.firetimes_flag) {
         azimuth += (frame.fParam.rotation_flag > 0 ? 1 : -1) * 
           doubleToInt(GetFiretimesCorrection(channel_index, pTail->GetMotorSpeed() * (this->lidar_type_ != STR_OTHER ? 1.0 : 0.1), 

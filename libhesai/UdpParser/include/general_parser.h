@@ -208,6 +208,9 @@ struct CorrectionData {
 template <typename T_Point>
 class GeneralParser {
  public:
+
+  bool enable_ot128_blockage_parsing_ = false;
+ 
   GeneralParser() {
     this->default_remake_config.min_azi = 0.f;
     this->default_remake_config.max_azi = 360.f;

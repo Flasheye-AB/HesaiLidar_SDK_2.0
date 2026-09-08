@@ -381,7 +381,15 @@ template <typename PointT>
 class LidarDecodedFrame
 {
     public:
-    LidarDecodedFrame(uint16_t maxPacketNum = 5000, uint16_t maxNumPerPacket = 1024) {
+      // Blockage detection
+      struct BlockageData {
+        uint32_t channel;
+        uint16_t status_code;
+      };
+      std::vector<BlockageData> frame_blockages_;
+
+      LidarDecodedFrame(uint16_t maxPacketNum = 5000,
+                        uint16_t maxNumPerPacket = 1024) {
         resetMalloc(maxPacketNum, maxNumPerPacket);
         lidar_state = -1;
         work_mode = -1;
