@@ -400,6 +400,11 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       pHeader->GetBlockNum() + sizeof(HS_LIDAR_BODY_CRC_ME_V4) +
       (hasFunctionSafety(pHeader->m_u8Status) ? sizeof(HS_LIDAR_FUNC_SAFETY_ME_V4) : 0));
 
+  if (frame.sensor_model.empty()) {
+    frame.sensor_model =
+        (this->lidar_type_ == STR_OTHER) ? "JT128" : this->lidar_type_;
+  }
+  
   int point_index = packet_index * frame.per_points_num;
   int point_num = 0;
   auto& packetData = frame.packetData[packet_index];
@@ -451,11 +456,28 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       /* JT128 begin */
         dirtyLevel = (weightFactor >> 6) & 0x3;
         noiseLevel = weightFactor & 0b00111111;
+        // JT128 blockage detection
+        // Only record this point if there is dirt OR reportable ambient noise
+        // This threshold (>= 22) prevents clean points from flooding the vector
+        if (dirtyLevel > 0 || noiseLevel >= 22) {
+          frame.frame_blockages.push_back({static_cast<uint32_t>(channel_index),
+                                           static_cast<uint16_t>(dirtyLevel),
+                                           noiseLevel});
+        }
       /* JT128 end */
       }
       if (hasEnvLight(pHeader->m_u8Status)) envLight = pChnUnit->reserved[k];
 
-      float distance = static_cast<float>(pChnUnit->GetDistance() * frame.distance_unit);
+      uint16_t raw_dist = pChnUnit->GetDistance();
+      // OT128 blockage detection
+      if (this->lidar_type_ == STR_OT128) {
+        if (raw_dist <= 3) {
+          // Pack: Channel, Status Code (0-3), and Noise (0 for OT128)
+          frame.frame_blockages.push_back(
+              {static_cast<uint32_t>(channel_index), raw_dist, 0});
+        }
+      }
+      float distance = static_cast<float>(raw_dist * frame.distance_unit);
       if (this->get_firetime_file_ && frame.fParam.firetimes_flag) {
         azimuth += (frame.fParam.rotation_flag > 0 ? 1 : -1) * 
           doubleToInt(GetFiretimesCorrection(channel_index, pTail->GetMotorSpeed() * (this->lidar_type_ != STR_OTHER ? 1.0 : 0.1), 
