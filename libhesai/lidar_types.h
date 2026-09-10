@@ -385,8 +385,10 @@ class LidarDecodedFrame
       struct BlockageData {
         uint32_t channel;
         uint16_t status_code;
+        uint8_t noise_level;
       };
-      std::vector<BlockageData> frame_blockages_;
+      std::vector<BlockageData> frame_blockages;
+      std::string sensor_model;
 
       LidarDecodedFrame(uint16_t maxPacketNum = 5000,
                         uint16_t maxNumPerPacket = 1024) {
