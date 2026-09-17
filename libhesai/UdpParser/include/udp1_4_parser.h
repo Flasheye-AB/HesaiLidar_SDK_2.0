@@ -400,10 +400,12 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       pHeader->GetBlockNum() + sizeof(HS_LIDAR_BODY_CRC_ME_V4) +
       (hasFunctionSafety(pHeader->m_u8Status) ? sizeof(HS_LIDAR_FUNC_SAFETY_ME_V4) : 0));
 
-  if (frame.sensor_model.empty()) {
-    frame.sensor_model =
-        (this->lidar_type_ == STR_OTHER) ? "JT128" : this->lidar_type_;
-  }
+  // DEV-2744/DEV-2745 - Setup and Lidar type. GetLidarType() not reachable from here
+  const bool is_ot128 = (this->lidar_type_ == STR_OT128);
+  const bool is_jt128 = (this->lidar_type_ == STR_OTHER);
+  frame.blockage.Setup(frame.fParam.blockage_config, frame.laser_num,
+                       this->correction.elevation,
+                       is_jt128 ? "JT128" : (is_ot128 ? "OT128" : ""));
   
   int point_index = packet_index * frame.per_points_num;
   int point_num = 0;
@@ -456,28 +458,25 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       /* JT128 begin */
         dirtyLevel = (weightFactor >> 6) & 0x3;
         noiseLevel = weightFactor & 0b00111111;
-        // JT128 blockage detection
-        // Only record this point if there is dirt OR reportable ambient noise
-        // This threshold (>= 22) prevents clean points from flooding the vector
-        if (dirtyLevel > 0 || noiseLevel >= 22) {
-          frame.frame_blockages.push_back({static_cast<uint32_t>(channel_index),
-                                           static_cast<uint16_t>(dirtyLevel),
-                                           noiseLevel});
-        }
       /* JT128 end */
       }
       if (hasEnvLight(pHeader->m_u8Status)) envLight = pChnUnit->reserved[k];
 
       uint16_t raw_dist = pChnUnit->GetDistance();
-      // OT128 blockage detection
-      if (this->lidar_type_ == STR_OT128) {
-        if (raw_dist <= 3) {
-          // Pack: Channel, Status Code (0-3), and Noise (0 for OT128)
-          frame.frame_blockages.push_back(
-              {static_cast<uint32_t>(channel_index), raw_dist, 0});
-        }
+      // DEV-2744/DEV-2745
+      // OT128 up-close blockage detection. When enabled on the sensor a channel
+      // with no valid point carries a status code in the distance field instead
+      // of 0: 1 = return inside 0.3 m, 2 = return 0.3-1.4 m on a channel without
+      // near field range, 3 = no return or rejected. Zeroed here so the cloud is
+      // the same whether the feature is on or off
+      int blockage_code = 0;
+      if (is_ot128 && raw_dist <= 3) {
+        blockage_code = raw_dist;
+        raw_dist = 0;
       }
+
       float distance = static_cast<float>(raw_dist * frame.distance_unit);
+
       if (this->get_firetime_file_ && frame.fParam.firetimes_flag) {
         azimuth += (frame.fParam.rotation_flag > 0 ? 1 : -1) * 
           doubleToInt(GetFiretimesCorrection(channel_index, pTail->GetMotorSpeed() * (this->lidar_type_ != STR_OTHER ? 1.0 : 0.1), 
@@ -496,6 +495,12 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       this->CircleRevise(elevation);
       if (this->IsChannelFovFilter(azimuth / kAllFineResolutionInt, channel_index, frame.fParam) == 1) continue;
       
+      // DEV-2744/DEV-2745
+      frame.blockage.Add(this->correction.elevation[channel_index],
+                         azimuth / kAllFineResolutionInt,
+                         is_jt128 ? dirtyLevel : blockage_code,
+                         is_jt128 ? noiseLevel : 0);
+
       uint64_t timestamp = packetData.t.sensor_timestamp * kMicrosecondToNanosecondInt;
       if (this->get_firetime_file_) {
         timestamp += block_ns_offset + GetFiretimes(channel_index, pTail->getOperationMode(), angleState, pChnUnit->GetDistance() * frame.distance_unit);
