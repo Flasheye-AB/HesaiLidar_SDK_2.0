@@ -91,8 +91,14 @@ struct RemakeConfig {
   bool use_ring_remake = false;
 };
 
-
-
+// Detect blockage/dirt. DEV-2744/DEV-2745
+// Currently used for OT128 (with blockage det enabled) and JT128
+// Blockage counted in sectors by angle
+struct BlockageConfig {
+  bool flag = false;
+  int elev_bins = 8;
+  int azim_bins = 32;
+};
 
 #define DEFAULT_MAX_MULTI_FRAME_NUM 10.0
 

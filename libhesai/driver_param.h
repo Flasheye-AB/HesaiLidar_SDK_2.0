@@ -86,6 +86,7 @@ typedef struct DecoderParam
   bool xt_spot_correction = false;
   bool et_blooming_filter_flag = false;
   RemakeConfig remake_config;
+  BlockageConfig blockage_config; // DEV-2744/DEV-2745
   uint32_t socket_buffer_size = 0;
   std::string channel_fov_filter_path = "";  // correction/config/channel_fov_filter.txt
   std::string multi_fov_filter_ranges = "";  // multiple fov filter ranges, for all channels
@@ -148,6 +149,8 @@ typedef struct InputParam
   bool send_packet_ros;
   bool send_point_cloud_ros;
   bool send_imu_ros;
+  bool send_blockage_ros;                 // DEV-2744/DEV-2745
+  uint32_t blockage_accumulate_frames;    // frames per published report, >= 1
   std::string frame_id;
 
   std::string ros_send_packet_topic = NULL_TOPIC;
@@ -157,6 +160,7 @@ typedef struct InputParam
   std::string ros_send_correction_topic = NULL_TOPIC;
   std::string ros_send_imu_topic = NULL_TOPIC;
   std::string ros_send_every_packet_topic = NULL_TOPIC;
+  std::string ros_send_blockage_topic = NULL_TOPIC;   // DEV-2744/DEV-2745
 
   std::string ros_recv_correction_topic = NULL_TOPIC;
   std::string ros_recv_packet_topic = NULL_TOPIC;
