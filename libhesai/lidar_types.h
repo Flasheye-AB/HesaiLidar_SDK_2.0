@@ -193,6 +193,7 @@ struct FrameDecodeParam {
   TransformParam transform;
   int rotation_flag;
   RemakeConfig remake_config;
+  BlockageConfig blockage_config; // DEV-2744/DEV-2745
   bool et_blooming_filter_flag;
   bool use_cuda;
   float frame_frequency;
@@ -236,6 +237,7 @@ struct FrameDecodeParam {
     enable_packet_timeloss_tool_ = param.decoder_param.enable_packet_timeloss_tool;
     packet_timeloss_tool_continue_ = param.decoder_param.packet_timeloss_tool_continue;
     remake_config = param.decoder_param.remake_config;
+    blockage_config = param.decoder_param.blockage_config; // DEV-2744/DEV-274
     et_blooming_filter_flag = param.decoder_param.et_blooming_filter_flag;
     use_cuda = param.use_gpu;
     update_function_safety_flag = param.decoder_param.update_function_safety_flag;
@@ -377,19 +379,84 @@ struct FrameDecodeParam {
   }
 };
 
+// Flasheye DEV-2744/DEV-2745: blockage / dirt counters.
+// One entry per angular sector, flattened and indexed by elev_bin * azim_bins + azim_bin.
+// Setup will do it's job once when angle correction is available.
+// Add called for every point so the logic lives here. 
+// Reset called by Update to clear before next frame
+
+struct BlockageStats {
+  static constexpr int kCodeNum  = 4;     // OT128 distance code, or JT128 dirtyLevel
+  static constexpr int kNoiseNum = 2;     // JT128 noiseLevel bands
+  static constexpr uint8_t kNoiseModerate = 22; // JF: where does this number come from? Should be param?
+  static constexpr uint8_t kNoiseHigh     = 43; // JF: where does this number come from? Should be param?
+
+  bool ready = false;                     // True when setup complete
+  int elev_bins = 0;
+  int azim_bins = 0;
+  float elev_min = 0.0f;                  // degrees, from the angle correction
+  float elev_max = 0.0f;
+  float elev_scale = 0.0f;                // elev_bins / (elev_max - elev_min)
+  std::vector<uint32_t> samples;                // beams counted, per sector
+  std::vector<uint32_t> code_hits[kCodeNum];
+  std::vector<uint32_t> noise_hits[kNoiseNum];
+  std::string sensor_type;   // "OT128", "JT128", or empty
+
+  // Setup, allocations
+  void Setup(const BlockageConfig& cfg, int lasers, const float* elevation, const char* type) {
+    // Return if already ready or not yet ready to become ready
+    if (ready || !cfg.flag || elevation == nullptr || lasers <= 0) return;
+    // Compute elevation span
+    auto mm = std::minmax_element(elevation, elevation + lasers);
+    const float mn = *mm.first, mx = *mm.second;
+    if (mx - mn < 0.001f) return;         // no angle correction loaded yet so cant finish
+    elev_bins = cfg.elev_bins;
+    azim_bins = cfg.azim_bins;
+    if (elev_bins <= 0) elev_bins = 1;
+    if (azim_bins <= 0) azim_bins = 1;
+    elev_min = mn;
+    elev_max = mx;
+    elev_scale = elev_bins / (mx - mn);
+    // Allocate
+    const size_t n = size_t(elev_bins) * azim_bins;
+    samples.assign(n, 0);
+    for (int i = 0; i < kCodeNum; i++) code_hits[i].assign(n, 0);
+    for (int i = 0; i < kNoiseNum; i++) noise_hits[i].assign(n, 0);
+    // Ready
+    sensor_type = type;
+    ready = true;
+    LogInfo("[flasheye] blockage binning %d elev x %d azim, elevation %.2f to %.2f deg",
+            elev_bins, azim_bins, elev_min, elev_max);
+  }
+
+  void Reset() {
+    if (!ready) return;
+    const size_t n = samples.size();
+    samples.assign(n, 0);
+    for (int i = 0; i < kCodeNum; i++) code_hits[i].assign(n, 0);
+    for (int i = 0; i < kNoiseNum; i++) noise_hits[i].assign(n, 0);
+  }
+
+  // One beam, located by angle on both axes. Preconditions from the caller:
+  // code in [0,3].
+  inline void Add(float elev_deg, int azim_deg, int code, uint8_t noise) {
+    if(!ready) return;
+    size_t ie = std::clamp( int((elev_deg - elev_min) * elev_scale), 0, elev_bins - 1);
+    size_t ia = std::clamp( int(azim_deg * azim_bins / 360), 0, azim_bins - 1 );
+    const size_t idx = ie * azim_bins + ia;
+    samples[idx]++;
+    code_hits[code][idx]++;
+    if (noise >= kNoiseHigh) noise_hits[1][idx]++;
+    else if (noise >= kNoiseModerate) noise_hits[0][idx]++;
+  }
+};
+
+
+
 template <typename PointT>
 class LidarDecodedFrame
 {
     public:
-      // Blockage detection
-      struct BlockageData {
-        uint32_t channel;
-        uint16_t status_code;
-        uint8_t noise_level;
-      };
-      std::vector<BlockageData> frame_blockages;
-      std::string sensor_model;
-
       LidarDecodedFrame(uint16_t maxPacketNum = 5000,
                         uint16_t maxNumPerPacket = 1024) {
         resetMalloc(maxPacketNum, maxNumPerPacket);
@@ -481,6 +548,7 @@ class LidarDecodedFrame
         memset(algorithm_data_vec.data(), 0, sizeof(AlgorithmUseData) * algorithm_data_vec.size());
       }
 #endif // ALGORITHM_USE_DATA
+      if (fParam.IsMultiFrameFrequency() == 0) blockage.Reset();   // DEV-2744/DEV-2745
     }
     void clearFuncSafety() {
       memset(funcSafety, 0, sizeof(FunctionSafety) * maxPacketPerFrame);
@@ -494,12 +562,14 @@ class LidarDecodedFrame
       multi_frame_start_timestamp = 0;
       multi_frame_end_timestamp = 0;
       multi_frame_index++;
+      blockage.Reset();  // DEV-2744/DEV-2745
     }
     uint8_t* total_memory = nullptr; 
     uint32_t maxPacketPerFrame;
     uint32_t maxPointPerPacket;
     // configure
     FrameDecodeParam fParam;
+    BlockageStats blockage;   // DEV-2744/DEV-2745
 
     // frame parameter
     int16_t lidar_state;
