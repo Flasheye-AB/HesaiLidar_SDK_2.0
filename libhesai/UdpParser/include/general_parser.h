@@ -737,6 +737,9 @@ class GeneralParser {
     if (rq.ring_elev_resolution < 0) rq.ring_elev_resolution = default_remake_config.ring_elev_resolution;
     if (rq.max_elev_scan < 0) rq.max_elev_scan = default_remake_config.max_elev_scan;
 
+    if (rq.dense_ring_start < 0) rq.dense_ring_start = default_remake_config.dense_ring_start;
+    if (rq.dense_ring_end < 0) rq.dense_ring_end = default_remake_config.dense_ring_end;
+
     if (static_cast<uint32_t>(rq.max_azi_scan) > frame.maxPacketPerFrame || static_cast<uint32_t>(rq.max_elev_scan) > frame.maxPointPerPacket) {
       int max_azi = HS_MAX(static_cast<uint32_t>(rq.max_azi_scan), frame.maxPacketPerFrame);
       int max_elev = HS_MAX(static_cast<uint32_t>(rq.max_elev_scan), frame.maxPointPerPacket);
@@ -744,7 +747,9 @@ class GeneralParser {
     }
   }
 
-  void DoRemake(int azi, int elev, int ring, const RemakeConfig& rq, int& point_idx) {
+  void DoRemake(int azi, int elev, int ring, const RemakeConfig& rq, int& point_idx, int* duplicate_idx = nullptr) {
+    // point_idx is ref because hesai. duplicate_idx because it needs to be a default null param.
+    if (duplicate_idx) *duplicate_idx = -1;
     if (rq.flag == false) return;
     float azi_ = azi / kAllFineResolutionFloat;
     float elev_ = elev / kAllFineResolutionFloat;
@@ -755,10 +760,22 @@ class GeneralParser {
     if (!rq.use_ring_remake) {
       new_elev_iscan = static_cast<int>(std::round((elev_ - rq.min_elev) / rq.ring_elev_resolution));
     }
-    if (new_azi_iscan >= 0 && new_azi_iscan < rq.max_azi_scan && new_elev_iscan >= 0 && new_elev_iscan < rq.max_elev_scan) {
-      point_idx = new_azi_iscan * rq.max_elev_scan + new_elev_iscan;
+    if (new_azi_iscan >= 0 && new_azi_iscan < rq.max_azi_scan &&
+      new_elev_iscan >= 0 && new_elev_iscan < rq.max_elev_scan) {
+      // Flasheye: backfill sparse grid
+      if (duplicate_idx && rq.duplicate_sparse_rings && rq.dense_ring_start >= 0 &&
+          (ring < rq.dense_ring_start || ring > rq.dense_ring_end)) {
+        int even_azi = new_azi_iscan & ~1;
+        int odd_azi = even_azi + 1;
+        point_idx = even_azi * rq.max_elev_scan + new_elev_iscan;
+        if (odd_azi < rq.max_azi_scan) *duplicate_idx = odd_azi * rq.max_elev_scan + new_elev_iscan;
+      } else {
+        point_idx = new_azi_iscan * rq.max_elev_scan + new_elev_iscan;
+      }
     }
   }
+
+
 
   // update right memory space
   virtual void setFrameRightMemorySpace(LidarDecodedFrame<T_Point> &frame) {
