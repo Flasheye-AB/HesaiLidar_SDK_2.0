@@ -493,29 +493,37 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       GeneralParser<T_Point>::DoRemake(azimuth, elevation, channel_index, frame.fParam.remake_config, point_index_rerank, &point_index_duplicate); 
       if(point_index_rerank >= 0) { 
         auto& ptinfo = frame.points[point_index_rerank]; 
-        set_x(ptinfo, x); 
-        set_y(ptinfo, y); 
-        set_z(ptinfo, z); 
-        set_ring(ptinfo, channel_index); 
-        set_intensity(ptinfo, pChnUnit->GetReflectivity());  
-        set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
-        set_timeSecond_lazy(ptinfo, [timestamp]() { return timestamp / kNanosecondToSecondInt; });
-        set_timeNanosecond_lazy(ptinfo, [timestamp]() {return timestamp % kNanosecondToSecondInt; });
-        set_confidence(ptinfo, confidence);
-        /* JT128 begin */ 
-        set_dirtyLevel(ptinfo, dirtyLevel);
-        set_noiseLevel(ptinfo, noiseLevel);
-        /* JT128 end */
-        set_weightFactor(ptinfo, weightFactor);
-        set_envLight(ptinfo, envLight);
-        set_azimuth_lazy(ptinfo, [u16Azimuth]() { return static_cast<float>(u16Azimuth) / kResolutionFloat; }); 
-        set_azimuthCalib_lazy(ptinfo, [azimuth]() {return static_cast<float>(azimuth) / kAllFineResolutionFloat; }); 
-        set_elevation(ptinfo, this->correction.elevation[channel_index]);
-        set_elevationCalib_lazy(ptinfo, [elevation]() { return static_cast<float>(elevation) / kAllFineResolutionFloat; }); 
-        set_distance(ptinfo, distance); 
-        if (point_index_duplicate >= 0) frame.points[point_index_duplicate] = ptinfo;
+        if(distance>0) { // Needed for Remake with backfill to work
+          set_x(ptinfo, x); 
+          set_y(ptinfo, y); 
+          set_z(ptinfo, z); 
+          set_ring(ptinfo, channel_index); 
+          set_intensity(ptinfo, pChnUnit->GetReflectivity());  
+          set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
+          set_timeSecond_lazy(ptinfo, [timestamp]() { return timestamp / kNanosecondToSecondInt; });
+          set_timeNanosecond_lazy(ptinfo, [timestamp]() {return timestamp % kNanosecondToSecondInt; });
+          set_confidence(ptinfo, confidence);
+          /* JT128 begin */ 
+          set_dirtyLevel(ptinfo, dirtyLevel);
+          set_noiseLevel(ptinfo, noiseLevel);
+          /* JT128 end */
+          set_weightFactor(ptinfo, weightFactor);
+          set_envLight(ptinfo, envLight);
+          set_azimuth_lazy(ptinfo, [u16Azimuth]() { return static_cast<float>(u16Azimuth) / kResolutionFloat; }); 
+          set_azimuthCalib_lazy(ptinfo, [azimuth]() {return static_cast<float>(azimuth) / kAllFineResolutionFloat; }); 
+          set_elevation(ptinfo, this->correction.elevation[channel_index]);
+          set_elevationCalib_lazy(ptinfo, [elevation]() { return static_cast<float>(elevation) / kAllFineResolutionFloat; }); 
+          set_distance(ptinfo, distance); 
+          if (point_index_duplicate >= 0) frame.points[point_index_duplicate] = ptinfo;
 
-        point_num++;
+          point_num++;
+        } else {
+          if(ptinfo.timestamp == 0.0) {
+            set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
+            set_timeSecond_lazy(ptinfo, [timestamp]() { return timestamp / kNanosecondToSecondInt; });
+            set_timeNanosecond_lazy(ptinfo, [timestamp]() {return timestamp % kNanosecondToSecondInt; });
+          }
+        }
       }
     }
   }
