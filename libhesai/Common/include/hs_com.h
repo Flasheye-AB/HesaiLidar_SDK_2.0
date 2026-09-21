@@ -88,7 +88,15 @@ struct RemakeConfig {
   float max_elev = -1;
   float ring_elev_resolution = -1;
   int max_elev_scan = -1;   // (max_elev - min_elev) / ring_elev_resolution
-  bool use_ring_remake = false;
+  bool use_ring_remake = false;  
+  // Flasheye: sensors whose outer rings sample azimuth at half rate (OT128 rings
+  // 0..23 and 88..127) leave every other grid column empty on those rings. 
+  // When we back fill with one of the nighbors.
+  // Use dense_ring_start=-1 dense_ring_end=-1 duplicate_sparse_rings=true for OT128
+  // uses correct default (24 and 87) for OT128.
+  bool duplicate_sparse_rings = false;
+  int dense_ring_start = -1;
+  int dense_ring_end = -1;
 };
 
 
