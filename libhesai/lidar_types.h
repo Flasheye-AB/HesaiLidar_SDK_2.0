@@ -445,7 +445,10 @@ struct BlockageStats {
     size_t ia = std::clamp( int(azim_deg * azim_bins / 360), 0, azim_bins - 1 );
     const size_t idx = ie * azim_bins + ia;
     samples[idx]++;
-    code_hits[code][idx]++;
+    
+    // code is set to -1 for OT if the hit is OK. Skip adding those points
+    if (code != -1) code_hits[code][idx]++;
+
     if (noise >= kNoiseHigh) noise_hits[1][idx]++;
     else if (noise >= kNoiseModerate) noise_hits[0][idx]++;
   }

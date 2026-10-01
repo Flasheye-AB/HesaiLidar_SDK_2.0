@@ -469,7 +469,7 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       // of 0: 1 = return inside 0.3 m, 2 = return 0.3-1.4 m on a channel without
       // near field range, 3 = no return or rejected. Zeroed here so the cloud is
       // the same whether the feature is on or off
-      int blockage_code = 0;
+      int blockage_code = -1;
       if (is_ot128 && raw_dist <= 3) {
         blockage_code = raw_dist;
         raw_dist = 0;
